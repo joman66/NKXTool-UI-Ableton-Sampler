@@ -9,21 +9,38 @@ public static class AbletonExportService
     /// <summary>Name of the folder (inside the unpack output folder) which receives the Ableton presets.</summary>
     public const string DefaultOutputFolderName = "Ableton Sampler";
 
+    /// <summary>
+    /// Finds what to convert below a folder: the .nki instruments if there are any (they contain the exact
+    /// mapping), otherwise every folder with samples (e.g. the content of an NKS sample container) becomes
+    /// an instrument mapped from its file names.
+    /// </summary>
+    public static List<string> CollectSources(string folder, string? excludeFolder = null)
+    {
+        bool Keep(string path) =>
+            excludeFolder is null || !path.StartsWith(excludeFolder.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+
+        var nkiFiles = AbletonConverter.FindNkiFiles(folder).Where(Keep).ToList();
+        return nkiFiles.Count > 0 ? nkiFiles : SampleFolderMapper.FindSampleFolders(folder).Where(Keep).ToList();
+    }
+
+    /// <param name="sources">.nki files and/or sample folders.</param>
     public static Task<AbletonExportSummary> ConvertAsync(
-        IReadOnlyList<string> nkiFiles,
+        IReadOnlyList<string> sources,
         string outputFolder,
         int abletonVersion,
+        MiddleC middleC,
         IReadOnlyList<string> sampleSearchFolders,
         Action<string> log,
         CancellationToken cancellationToken = default)
     {
-        return Task.Run(() => Convert(nkiFiles, outputFolder, abletonVersion, sampleSearchFolders, log, cancellationToken), cancellationToken);
+        return Task.Run(() => Convert(sources, outputFolder, abletonVersion, middleC, sampleSearchFolders, log, cancellationToken), cancellationToken);
     }
 
     private static AbletonExportSummary Convert(
         IReadOnlyList<string> nkiFiles,
         string outputFolder,
         int abletonVersion,
+        MiddleC middleC,
         IReadOnlyList<string> sampleSearchFolders,
         Action<string> log,
         CancellationToken cancellationToken)
@@ -47,9 +64,14 @@ public static class AbletonExportService
         {
             cancellationToken.ThrowIfCancellationRequested();
             var nki = nkiFiles[i];
-            log($"[{i + 1}/{nkiFiles.Count}] {Path.GetFileName(nki)}");
+            var isSampleFolder = Directory.Exists(nki);
+            log(isSampleFolder
+                ? $"[{i + 1}/{nkiFiles.Count}] Sample folder {nki}"
+                : $"[{i + 1}/{nkiFiles.Count}] {Path.GetFileName(nki)}");
 
-            var result = converter.Convert(nki, cancellationToken);
+            var result = isSampleFolder
+                ? converter.ConvertSampleFolder(nki, middleC, cancellationToken)
+                : converter.Convert(nki, cancellationToken);
             foreach (var warning in result.Warnings)
             {
                 log($"    ! {warning}");

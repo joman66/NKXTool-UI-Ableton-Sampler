@@ -43,6 +43,9 @@ public partial class ConvertWindow : Window
         LiveVersionLabel.Text = _localization.Get("convert.liveVersion");
         Live12RadioButton.Content = _localization.Get("convert.live12");
         Live11RadioButton.Content = _localization.Get("convert.live11");
+        MiddleCLabel.Text = _localization.Get("convert.middleC");
+        MiddleC3RadioButton.Content = _localization.Get("convert.middleC3");
+        MiddleC4RadioButton.Content = _localization.Get("convert.middleC4");
         HintTextBlock.Text = _localization.Get("convert.hint");
         LogLabel.Text = _localization.Get("convert.log");
         OpenOutputButton.Content = _localization.Get("convert.openOutput");
@@ -50,12 +53,13 @@ public partial class ConvertWindow : Window
         CloseWindowButton.Content = _localization.Get("action.close");
     }
 
+    /// <summary>Adds .nki files and sample folders (folders are converted by mapping their samples from the file names).</summary>
     private void AddFiles(IEnumerable<string> files)
     {
         foreach (var file in files)
         {
-            if (string.Equals(Path.GetExtension(file), ".nki", StringComparison.OrdinalIgnoreCase) &&
-                !_nkiFiles.Contains(file, StringComparer.OrdinalIgnoreCase))
+            var isSource = Directory.Exists(file) || string.Equals(Path.GetExtension(file), ".nki", StringComparison.OrdinalIgnoreCase);
+            if (isSource && !_nkiFiles.Contains(file, StringComparer.OrdinalIgnoreCase))
             {
                 _nkiFiles.Add(file);
             }
@@ -63,7 +67,8 @@ public partial class ConvertWindow : Window
 
         if (string.IsNullOrWhiteSpace(OutputFolderTextBox.Text) && _nkiFiles.Count > 0)
         {
-            var firstFolder = Path.GetDirectoryName(_nkiFiles[0]);
+            var first = _nkiFiles[0];
+            var firstFolder = Directory.Exists(first) ? Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(first)) : Path.GetDirectoryName(first);
             if (firstFolder is not null)
             {
                 OutputFolderTextBox.Text = Path.Combine(firstFolder, AbletonExportService.DefaultOutputFolderName);
@@ -94,7 +99,8 @@ public partial class ConvertWindow : Window
             return;
         }
 
-        var files = AbletonConverter.FindNkiFiles(folder);
+        // .nki instruments if the folder has any, otherwise its sample folders (e.g. extracted NKS content)
+        var files = AbletonExportService.CollectSources(folder);
         if (files.Count == 0)
         {
             MessageBox.Show(this, _localization.Get("convert.noNkiInFolder"), _localization.Get("app.title"), MessageBoxButton.OK, MessageBoxImage.Information);
@@ -121,7 +127,7 @@ public partial class ConvertWindow : Window
         {
             if (Directory.Exists(path))
             {
-                AddFiles(AbletonConverter.FindNkiFiles(path));
+                AddFiles(AbletonExportService.CollectSources(path));
             }
             else
             {
@@ -205,6 +211,7 @@ public partial class ConvertWindow : Window
         }
 
         var abletonVersion = Live11RadioButton.IsChecked == true ? 11 : 12;
+        var middleC = MiddleC4RadioButton.IsChecked == true ? MiddleC.C4 : MiddleC.C3;
         _cancellation = new CancellationTokenSource();
 
         try
@@ -216,6 +223,7 @@ public partial class ConvertWindow : Window
                 _nkiFiles.ToList(),
                 outputFolder,
                 abletonVersion,
+                middleC,
                 searchFolders,
                 line => Dispatcher.Invoke(() => AppendLog(line)),
                 _cancellation.Token);
@@ -277,6 +285,8 @@ public partial class ConvertWindow : Window
         OutputFolderTextBox.IsEnabled = !isBusy;
         SampleFolderTextBox.IsEnabled = !isBusy;
         Live11RadioButton.IsEnabled = !isBusy;
+        MiddleC3RadioButton.IsEnabled = !isBusy;
+        MiddleC4RadioButton.IsEnabled = !isBusy;
         Live12RadioButton.IsEnabled = !isBusy;
         FilesListBox.IsEnabled = !isBusy;
         RunConvertButton.IsEnabled = !isBusy;

@@ -21,7 +21,7 @@ The application focuses on a clean native workflow: pack a folder, pack from a `
 - Live console/log output in the UI.
 - Light and dark theme support.
 - Configurable path to `NkxTool.exe` through `nkxtoolsettings.json`.
-- **Convert Kontakt instruments (`.nki`) to Ableton Live Sampler presets (`.adv`)** – either automatically after unpacking, or from the dedicated *Convert NKI to Ableton* window.
+- **Create Ableton Live Sampler instruments (`.adv`)** from unpacked archives – from `.nki` instruments (exact mapping) or from the samples of `.nks` / `.nkx` sample containers (mapping derived from file names) – automatically after unpacking, or from the *Convert to Ableton* window.
 
 ## Requirements
 
@@ -109,8 +109,23 @@ Partial extraction from the browse view is not fully implemented yet.
 
 ## Convert to Ableton Sampler
 
-Every `.nki` instrument extracted from an NKX archive (or any other `.nki` on disk) can be turned
-into an Ableton Live **Sampler** preset.
+Unpacked content can be turned into Ableton Live **Sampler** presets:
+
+- **`.nki` instruments** are converted with their exact Kontakt mapping (table below).
+- **Sample containers (`.nks` / `.nkx`) without instruments** – NkxTool extracts them to folders of
+  samples. Every folder with samples becomes one Sampler instrument named after the folder. The
+  mapping is derived from:
+  - the root key and loop stored in the sample (WAV `smpl` / AIFF `INST` chunk),
+  - note names in the file name (`C3`, `F#2`, `Eb4`, `Cs3`) or MIDI numbers (`Piano_060`, `note60`) –
+    choose whether C3 or C4 is MIDI 60,
+  - velocity layers: `v40`/`v80`/`v127` (upper bounds), `v1`..`v4` or `layer2` (even split),
+    `pp`..`fff`, `soft`/`medium`/`hard`,
+  - round robins (`rr1`, `seq2`, `var3`) and release samples (`rel`, `release` – left out, see below),
+  - each sample covers the keys half way to its neighbours; folders without any pitch information
+    (drum kits) get one key per sample starting at C1.
+
+When unpacking, archives that contain `.nki` files are converted from the NKIs; all others are
+converted from their sample folders.
 
 Two ways to use it:
 
@@ -118,8 +133,8 @@ Two ways to use it:
   Unpack window. After all archives are extracted, every `.nki` found in the extracted files is
   converted. The conversion runs after the whole batch, so instruments whose samples live in a
   different archive of the same batch are still resolved.
-- **Standalone:** *Convert NKI to Ableton* on the main window. Add `.nki` files or whole folders
-  (drag & drop works too), pick an output folder, and optionally a sample folder to search.
+- **Standalone:** *Convert to Ableton* on the main window. Add `.nki` files or folders – a folder adds its
+  `.nki` files, or its sample folders if it has none (drag & drop works too), pick an output folder, and optionally a sample folder to search.
 
 ### What is converted
 

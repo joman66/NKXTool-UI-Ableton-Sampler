@@ -39,6 +39,9 @@ public partial class UnpackWindow : Window
         LiveVersionLabel.Text = _localization.Get("convert.liveVersion");
         Live12RadioButton.Content = _localization.Get("convert.live12");
         Live11RadioButton.Content = _localization.Get("convert.live11");
+        MiddleCLabel.Text = _localization.Get("convert.middleC");
+        MiddleC3RadioButton.Content = _localization.Get("convert.middleC3");
+        MiddleC4RadioButton.Content = _localization.Get("convert.middleC4");
         ConvertHintTextBlock.Text = _localization.Get("unpack.convertHint");
         RunUnpackButton.Content = _localization.Get("unpack.run");
         CloseWindowButton.Content = _localization.Get("action.close");
@@ -133,6 +136,7 @@ public partial class UnpackWindow : Window
         var createSubfolders = CreateSubfoldersCheckBox.IsChecked == true;
         var convertToAbleton = ConvertToAbletonCheckBox.IsChecked == true;
         var abletonVersion = Live11RadioButton.IsChecked == true ? 11 : 12;
+        var middleC = MiddleC4RadioButton.IsChecked == true ? NkiConverter.Conversion.MiddleC.C4 : NkiConverter.Conversion.MiddleC.C3;
         var extractedFolders = new List<string>();
         var successCount = 0;
         var failureCount = 0;
@@ -179,7 +183,7 @@ public partial class UnpackWindow : Window
             // Convert after all archives are extracted: samples of an instrument are often in another archive
             if (convertToAbleton && extractedFolders.Count > 0)
             {
-                await ConvertExtractedInstrumentsAsync(outputRoot, extractedFolders, abletonVersion);
+                await ConvertExtractedInstrumentsAsync(outputRoot, extractedFolders, abletonVersion, middleC);
             }
 
             StatusTextBlock.Text = failureCount == 0
@@ -192,12 +196,13 @@ public partial class UnpackWindow : Window
         }
     }
 
-    private async Task ConvertExtractedInstrumentsAsync(string outputRoot, IReadOnlyList<string> extractedFolders, int abletonVersion)
+    private async Task ConvertExtractedInstrumentsAsync(string outputRoot, IReadOnlyList<string> extractedFolders, int abletonVersion, NkiConverter.Conversion.MiddleC middleC)
     {
         var abletonFolder = Path.Combine(outputRoot, AbletonExportService.DefaultOutputFolderName);
+
+        // Per archive: its .nki instruments if it has any, otherwise one instrument per sample folder (NKS content)
         var nkiFiles = extractedFolders
-            .SelectMany(folder => NkiConverter.Conversion.AbletonConverter.FindNkiFiles(folder))
-            .Where(file => !file.StartsWith(abletonFolder + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            .SelectMany(folder => AbletonExportService.CollectSources(folder, abletonFolder))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
@@ -215,6 +220,7 @@ public partial class UnpackWindow : Window
                 nkiFiles,
                 abletonFolder,
                 abletonVersion,
+                middleC,
                 [outputRoot],
                 line => Dispatcher.Invoke(() => AppendLiveLogLine(line)));
 

@@ -22,7 +22,8 @@ public sealed class ConversionOptions
 
 public sealed class ConversionResult
 {
-    public required string NkiFile { get; init; }
+    /// <summary>The converted NKI file or sample folder.</summary>
+    public required string Source { get; init; }
     public List<string> PresetFiles { get; } = [];
     public List<string> Warnings { get; } = [];
     public string? Error { get; set; }
@@ -62,7 +63,7 @@ public sealed class AbletonConverter
 
     public ConversionResult Convert(string nkiFile, CancellationToken cancellationToken = default)
     {
-        var result = new ConversionResult { NkiFile = nkiFile };
+        var result = new ConversionResult { Source = nkiFile };
         try
         {
             var instruments = NkiReader.Read(nkiFile);
@@ -73,6 +74,38 @@ public sealed class AbletonConverter
                 var preset = ConvertInstrument(instrument, nkiFile, result.Warnings, cancellationToken);
                 result.PresetFiles.Add(preset);
             }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            result.Error = ex.Message;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Creates a Sampler preset from a folder of samples without mapping file (e.g. the content of a Kontakt
+    /// NKS / NKX sample container). The mapping is derived from file names and the root keys / loops stored
+    /// in the sample files, see <see cref="SampleFolderMapper"/>.
+    /// </summary>
+    public ConversionResult ConvertSampleFolder(string folder, MiddleC middleC = MiddleC.C3, CancellationToken cancellationToken = default)
+    {
+        var result = new ConversionResult { Source = folder };
+        try
+        {
+            var instrument = SampleFolderMapper.Map(folder, middleC);
+            result.Warnings.AddRange(instrument.Warnings);
+            if (!instrument.AllZones.Any())
+            {
+                throw new InvalidDataException("The folder contains no usable audio files.");
+            }
+
+            var preset = ConvertInstrument(instrument, Path.Combine(folder, "_.nki"), result.Warnings, cancellationToken);
+            result.PresetFiles.Add(preset);
         }
         catch (OperationCanceledException)
         {

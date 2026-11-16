@@ -113,6 +113,19 @@
                                      GroupName="UnpackLiveVersion"
                                      VerticalAlignment="Center" />
                     </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                        <TextBlock x:Name="MiddleCLabel"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,12,0" />
+                        <RadioButton x:Name="MiddleC3RadioButton"
+                                     GroupName="UnpackMiddleC"
+                                     IsChecked="True"
+                                     VerticalAlignment="Center"
+                                     Margin="0,0,16,0" />
+                        <RadioButton x:Name="MiddleC4RadioButton"
+                                     GroupName="UnpackMiddleC"
+                                     VerticalAlignment="Center" />
+                    </StackPanel>
                     <TextBlock x:Name="ConvertHintTextBlock"
                                Margin="0,6,0,0"
                                Foreground="{StaticResource MutedTextBrush}"

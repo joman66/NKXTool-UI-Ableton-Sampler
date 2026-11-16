@@ -131,6 +131,20 @@
                                  GroupName="ConvertLiveVersion"
                                  VerticalAlignment="Center" />
                 </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                    <TextBlock x:Name="MiddleCLabel"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"
+                               Margin="0,0,16,0" />
+                    <RadioButton x:Name="MiddleC3RadioButton"
+                                 GroupName="ConvertMiddleC"
+                                 IsChecked="True"
+                                 VerticalAlignment="Center"
+                                 Margin="0,0,16,0" />
+                    <RadioButton x:Name="MiddleC4RadioButton"
+                                 GroupName="ConvertMiddleC"
+                                 VerticalAlignment="Center" />
+                </StackPanel>
                 <TextBlock x:Name="HintTextBlock"
                            Margin="0,10,0,0"
                            Foreground="{StaticResource MutedTextBrush}"

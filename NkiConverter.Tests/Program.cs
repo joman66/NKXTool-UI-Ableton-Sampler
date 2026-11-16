@@ -364,6 +364,119 @@ Run("Encoded Kontakt 2 sample paths are decoded", () =>
     Equal("/HD/a.wav", Kontakt2Reader.DecodeSamplePath("@v002HDf000000a.wav"), "absolute path");
 });
 
+
+// ---------------- Sample folders (NKS / NKX content without NKI) ----------------
+
+string MakeFolder(string name, params string[] fileNames)
+{
+    var folder = Path.Combine(work, "folders", name);
+    Directory.CreateDirectory(folder);
+    foreach (var fileName in fileNames)
+    {
+        AudioBuilder.WriteWav16(Path.Combine(folder, fileName), [AudioBuilder.Sine(2000, 220)]);
+    }
+
+    return folder;
+}
+
+SampleZone ZoneOf(Instrument instrument, string fileName) =>
+    instrument.AllZones.Single(z => Path.GetFileName(z.SamplePath) == fileName);
+
+Run("Sample folder: note names, velocity values and release samples", () =>
+{
+    var folder = MakeFolder("Grand Piano", "Piano_C3_v40.wav", "Piano_C3_v127.wav", "Piano_E3_v40.wav", "Piano_E3_v127.wav", "Piano_C3_rel.wav");
+    var instrument = SampleFolderMapper.Map(folder);
+    Equal("Grand Piano", instrument.Name, "instrument name from folder");
+    var c3 = ZoneOf(instrument, "Piano_C3_v40.wav");
+    Equal(60, c3.KeyRoot, "C3 = 60");
+    Equal(0, c3.KeyLow, "C3 low key");
+    Equal(62, c3.KeyHigh, "C3 high key (half way to E3)");
+    Equal(1, c3.VelocityLow, "v40 layer low");
+    Equal(40, c3.VelocityHigh, "v40 layer high");
+    var e3 = ZoneOf(instrument, "Piano_E3_v127.wav");
+    Equal(64, e3.KeyRoot, "E3 = 64");
+    Equal(63, e3.KeyLow, "E3 low key");
+    Equal(127, e3.KeyHigh, "E3 high key");
+    Equal(41, e3.VelocityLow, "v127 layer low");
+    Equal(127, e3.VelocityHigh, "v127 layer high");
+    Check(instrument.Groups.Any(g => g.IsReleaseTrigger && g.Zones.Count == 1), "release sample in a release group");
+});
+
+Run("Sample folder: root key and loop from the WAV 'smpl' chunk", () =>
+{
+    var folder = Path.Combine(work, "folders", "Pad");
+    Directory.CreateDirectory(folder);
+    AudioBuilder.WriteWav16(Path.Combine(folder, "pad sample 1.wav"), [AudioBuilder.Sine(4000, 220)], smplRoot: 57, loopStart: 1000, loopEnd: 2999);
+    AudioBuilder.WriteWav16(Path.Combine(folder, "pad sample 2.wav"), [AudioBuilder.Sine(4000, 440)], smplRoot: 69);
+    var instrument = SampleFolderMapper.Map(folder);
+    var z = ZoneOf(instrument, "pad sample 1.wav");
+    Equal(57, z.KeyRoot, "root from smpl");
+    Equal(1, z.Loops.Count, "loop from smpl");
+    Equal(1000, z.Loops[0].Start, "loop start");
+    Equal(3000, z.Loops[0].End, "loop end (exclusive)");
+    Equal(69, ZoneOf(instrument, "pad sample 2.wav").KeyRoot, "second root from smpl");
+});
+
+Run("Sample folder: MIDI note numbers, dynamics and round robins", () =>
+{
+    var numbers = SampleFolderMapper.Map(MakeFolder("Bass", "Bass_036.wav", "Bass_048.wav", "Bass_060.wav"));
+    Equal(36, ZoneOf(numbers, "Bass_036.wav").KeyRoot, "MIDI number 36");
+    Equal(60, ZoneOf(numbers, "Bass_060.wav").KeyRoot, "MIDI number 60");
+
+    var dynamics = SampleFolderMapper.Map(MakeFolder("Strings", "Vln A3 pp.wav", "Vln A3 mf.wav", "Vln A3 ff.wav"));
+    Equal(1, ZoneOf(dynamics, "Vln A3 pp.wav").VelocityLow, "pp low");
+    Equal(42, ZoneOf(dynamics, "Vln A3 pp.wav").VelocityHigh, "pp high");
+    Equal(85, ZoneOf(dynamics, "Vln A3 ff.wav").VelocityLow, "ff low");
+    Equal(69, ZoneOf(dynamics, "Vln A3 ff.wav").KeyRoot, "A3 = 69 (C3 = 60)");
+
+    var rr = SampleFolderMapper.Map(MakeFolder("Snare RR", "Snare_D1_rr1.wav", "Snare_D1_rr2.wav", "Snare_D1_rr3.wav"));
+    Equal(3, rr.Groups.Count, "one group per round robin");
+    Check(rr.Groups.All(g => g.PlayLogic == PlayLogic.RoundRobin), "groups cycle");
+    Equal(38, rr.AllZones.First().KeyRoot, "D1 = 38");
+
+    var sharps = SampleFolderMapper.Map(MakeFolder("Sharps", "Gtr_C#2.wav", "Gtr_Eb2.wav", "Gtr_Fs2.wav"));
+    Equal(49, ZoneOf(sharps, "Gtr_C#2.wav").KeyRoot, "C#2");
+    Equal(51, ZoneOf(sharps, "Gtr_Eb2.wav").KeyRoot, "Eb2");
+    Equal(54, ZoneOf(sharps, "Gtr_Fs2.wav").KeyRoot, "Fs2 = F#2");
+
+    var c4 = SampleFolderMapper.Map(MakeFolder("MiddleC4", "Keys C4.wav", "Keys G4.wav"), MiddleC.C4);
+    Equal(60, ZoneOf(c4, "Keys C4.wav").KeyRoot, "C4 = 60 with the C4 convention");
+});
+
+Run("Sample folder: drum kit without note names is laid out chromatically", () =>
+{
+    var kit = SampleFolderMapper.Map(MakeFolder("Kit", "Kick.wav", "Snare.wav", "HiHat Closed.wav"));
+    Equal(36, ZoneOf(kit, "HiHat Closed.wav").KeyRoot, "first (alphabetical) on C1");
+    Equal(37, ZoneOf(kit, "Kick.wav").KeyLow, "one key per sample");
+    Equal(37, ZoneOf(kit, "Kick.wav").KeyHigh, "one key per sample");
+    Check(!ZoneOf(kit, "Snare.wav").KeyTracking, "drum zones are not transposed");
+});
+
+Run("Sample folder -> Ableton Sampler (end to end, Live 12)", () =>
+{
+    var root = Path.Combine(work, "nks_extract");
+    var samples = Path.Combine(root, "Library", "Samples");
+    Directory.CreateDirectory(samples);
+    foreach (var name in new[] { "Rhodes_C2_v1.wav", "Rhodes_C2_v2.wav", "Rhodes_C4_v1.wav", "Rhodes_C4_v2.wav" })
+    {
+        AudioBuilder.WriteWav16(Path.Combine(samples, name), [AudioBuilder.Sine(3000, 110)]);
+    }
+
+    File.WriteAllBytes(Path.Combine(samples, "Rhodes_C3_v1.ncw"), AudioBuilder.EncodeNcw([AudioBuilder.Sine(3000, 220)]));
+
+    var folders = SampleFolderMapper.FindSampleFolders(root);
+    Equal(1, folders.Count, "one sample folder found");
+    var output = Path.Combine(work, "nks_out");
+    var result = new AbletonConverter(new ConversionOptions { OutputFolder = output }).ConvertSampleFolder(folders[0]);
+    Check(result.Success, $"conversion succeeded ({result.Error})");
+    Check(Path.GetFileName(result.PresetFiles[0]) == "Library.adv", $"generic 'Samples' folder named after its parent ({Path.GetFileName(result.PresetFiles[0])})");
+    var parts = LoadAdv(result.PresetFiles[0]).Descendants("MultiSamplePart").ToList();
+    Equal(5, parts.Count, "zones");
+    var layer1 = parts.Where(p => Val(p, "VelocityRange/Max") == 63).ToList();
+    Equal(3, layer1.Count, "three samples in velocity layer 1 (incl. decoded NCW)");
+    Check(parts.Any(p => Val(p, "RootKey") == 60 && Val(p, "KeyRange/Min") == 55 && Val(p, "KeyRange/Max") == 66), "C3 zone spans half way to its neighbours");
+});
+
 try
 {
     Directory.Delete(work, true);

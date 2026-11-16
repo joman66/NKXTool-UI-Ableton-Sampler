@@ -298,11 +298,24 @@ internal static class AudioBuilder
     public static short[] Sine(int frames, double frequency, double amplitude = 0.5, int sampleRate = 44100) =>
         Enumerable.Range(0, frames).Select(i => (short)(Math.Sin(2 * Math.PI * frequency * i / sampleRate) * amplitude * short.MaxValue)).ToArray();
 
-    public static void WriteWav16(string file, short[][] channels, int sampleRate = 44100)
+    public static void WriteWav16(string file, short[][] channels, int sampleRate = 44100, int smplRoot = -1, int loopStart = -1, int loopEnd = -1)
     {
         var frames = channels[0].Length;
-        var b = new Bin().Ascii("RIFF").U32(36 + frames * channels.Length * 2).Ascii("WAVE")
+        var smpl = new Bin();
+        if (smplRoot >= 0)
+        {
+            var loops = loopStart >= 0 ? 1 : 0;
+            smpl.Ascii("smpl").U32(36 + loops * 24).U32(0).U32(0).U32(1_000_000_000 / sampleRate).U32(smplRoot).U32(0).U32(0).U32(0).U32(loops).U32(0);
+            if (loops > 0)
+            {
+                smpl.U32(0).U32(0).U32(loopStart).U32(loopEnd).U32(0).U32(0); // end is inclusive
+            }
+        }
+
+        var smplBytes = smpl.ToArray();
+        var b = new Bin().Ascii("RIFF").U32(36 + frames * channels.Length * 2 + smplBytes.Length).Ascii("WAVE")
             .Ascii("fmt ").U32(16).U16(1).U16(channels.Length).U32(sampleRate).U32(sampleRate * channels.Length * 2).U16(channels.Length * 2).U16(16)
+            .Bytes(smplBytes)
             .Ascii("data").U32(frames * channels.Length * 2);
         for (var i = 0; i < frames; i++)
         {
